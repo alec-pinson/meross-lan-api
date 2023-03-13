@@ -1,0 +1,7 @@
+devices:
+  - name: porch
+    ip: 192.168.1.45
+    channel: 0
+  - name: fly-heater
+    ip: 192.168.1.107
+    channel: 2

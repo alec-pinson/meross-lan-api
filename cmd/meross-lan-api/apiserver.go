@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 type APIServer struct{}
@@ -29,7 +30,10 @@ func (apiServer APIServer) Start() {
 	wg.Wait()
 }
 
+var mu sync.RWMutex
+
 func (apiServer APIServer) Endpoint(w http.ResponseWriter, r *http.Request) {
+	mu.Lock()
 	switch path := r.URL.Path[1:]; {
 	case path == "deviceList" || path == "":
 		apiServer.deviceList(w)
@@ -42,6 +46,7 @@ func (apiServer APIServer) Endpoint(w http.ResponseWriter, r *http.Request) {
 	case path == "health/live" || path == "health/ready":
 		fmt.Fprintf(w, "ok")
 	}
+	mu.Unlock()
 }
 
 func getDevice(name string) (Device, ErrorResponse) {
@@ -52,8 +57,32 @@ func getDevice(name string) (Device, ErrorResponse) {
 			return d, err
 		}
 	}
-	err.Error = "Device not found."
+	err.Error = "Device '" + name + "' not found."
 	return device, err
+}
+
+func SetLastOn(deviceName string) {
+	for idx, d := range config.Devices {
+		if d.Name == deviceName {
+			config.Devices[idx].LastOn = time.Now()
+		}
+	}
+}
+
+func SetLastOff(deviceName string) {
+	for idx, d := range config.Devices {
+		if d.Name == deviceName {
+			config.Devices[idx].LastOff = time.Now()
+		}
+	}
+}
+
+func SetLastStatus(deviceName string) {
+	for idx, d := range config.Devices {
+		if d.Name == deviceName {
+			config.Devices[idx].LastStatus = time.Now()
+		}
+	}
 }
 
 func getStatusString(device Device) string {
@@ -82,8 +111,17 @@ func (apiServer APIServer) deviceStatus(w http.ResponseWriter, deviceName string
 		writeResponse(w, err)
 		return
 	}
+
+	if !time.Now().After(device.LastStatus.Add(config.AntiSpam)) {
+		log.Println("Already turned got status in the last 5 seconds")
+		writeResponse(w, device)
+		return
+	}
+
 	device.Status = getStatusString(device)
 	writeResponse(w, device)
+
+	SetLastStatus(deviceName)
 }
 
 func (apiServer APIServer) turnOn(w http.ResponseWriter, deviceName string) {
@@ -92,8 +130,17 @@ func (apiServer APIServer) turnOn(w http.ResponseWriter, deviceName string) {
 		writeResponse(w, err)
 		return
 	}
+
+	if !time.Now().After(device.LastOn.Add(config.AntiSpam)) {
+		log.Println("Already turned on in the last 5 seconds")
+		writeResponse(w, device)
+		return
+	}
+
 	turnOn(device.IP, device.Channel, config.Key)
 	apiServer.deviceStatus(w, device.Name)
+
+	SetLastOn(deviceName)
 }
 
 func (apiServer APIServer) turnOff(w http.ResponseWriter, deviceName string) {
@@ -102,6 +149,15 @@ func (apiServer APIServer) turnOff(w http.ResponseWriter, deviceName string) {
 		writeResponse(w, err)
 		return
 	}
+
+	if !time.Now().After(device.LastOff.Add(config.AntiSpam)) {
+		log.Println("Already turned off in the last 5 seconds")
+		writeResponse(w, device)
+		return
+	}
+
 	turnOff(device.IP, device.Channel, config.Key)
 	apiServer.deviceStatus(w, device.Name)
+
+	SetLastOff(deviceName)
 }

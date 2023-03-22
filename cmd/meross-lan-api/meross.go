@@ -107,6 +107,10 @@ func sendRequest(deviceIp string, body Request) (Response, error) {
 	// convert body to bytes
 	bodyJSON, _ := json.Marshal(body)
 
+	if config.Debug {
+		return result, nil
+	}
+
 	// create and send request
 	req, err := http.NewRequest("POST", "http://"+deviceIp+"/config", bytes.NewBuffer(bodyJSON))
 	req.Header.Add("Content-Type", "application/json; charset=UTF-8")

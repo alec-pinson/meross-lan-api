@@ -77,10 +77,11 @@ func SetLastOff(deviceName string) {
 	}
 }
 
-func SetLastStatus(deviceName string) {
+func SetStatus(deviceName string, status string) {
 	for idx, d := range config.Devices {
 		if d.Name == deviceName {
 			config.Devices[idx].LastStatus = time.Now()
+			config.Devices[idx].Status = status
 		}
 	}
 }
@@ -113,15 +114,19 @@ func (apiServer APIServer) deviceStatus(w http.ResponseWriter, deviceName string
 	}
 
 	if !time.Now().After(device.LastStatus.Add(config.AntiSpam)) {
-		log.Println("Already turned got status in the last 5 seconds")
-		writeResponse(w, device, false)
-		return
+		log.Println("Already got status in the last 5 seconds")
+		for idx, d := range config.Devices {
+			if d.Name == deviceName {
+				writeResponse(w, config.Devices[idx], false)
+				return
+			}
+		}
 	}
 
 	device.Status = getStatusString(device)
 	writeResponse(w, device, false)
 
-	SetLastStatus(deviceName)
+	SetStatus(deviceName, device.Status)
 }
 
 func (apiServer APIServer) turnOn(w http.ResponseWriter, deviceName string) {
